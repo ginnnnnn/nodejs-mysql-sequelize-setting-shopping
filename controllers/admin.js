@@ -14,11 +14,26 @@ exports.postAddProduct = (req, res, next) => {
   const imageUrl = req.body.imageUrl;
   const description = req.body.description;
   // get req info and set as params
-  const product = new Product(null, title, imageUrl, description, price);
-  //class a new class with req params to get new info. this order matters /same in models
-  //null is the id
-  product.save();
-  res.redirect("/");
+  req.user
+    .createProduct({
+      title: title,
+      imageUrl: imageUrl,
+      price: price,
+      description: description
+    })
+    .then(() => {
+      console.log("Create Product");
+      res.redirect("/product-list");
+    })
+    .catch(err => console.log(err));
+  // Product.create({
+  //   //sequelize method create() it create table and save
+  //   title: title,
+  //   imageUrl: imageUrl,
+  //   price: price,
+  //   description: description,
+  //   userId: req.user.id
+  // })
 };
 
 exports.getEditProduct = (req, res, next) => {
@@ -28,17 +43,22 @@ exports.getEditProduct = (req, res, next) => {
   }
   const prdId = req.params.productId;
   // check route "/edit-product/:productId"
-  Product.findById(prdId, product => {
-    if (!product) {
-      return res.redirect("/");
-    }
-    res.render("admin/edit-product", {
-      pageTitle: "Add Product",
-      path: "/admin/edit-product",
-      editing: editMode,
-      product: product
-    });
-  });
+  req.user
+    .getProducts({ where: { id: prdId } })
+    .then(products => {
+      // products [{}]
+      const product = products[0];
+      if (!product) {
+        return res.redirect("/");
+      }
+      res.render("admin/edit-product", {
+        pageTitle: "Add Product",
+        path: "/admin/edit-product",
+        editing: editMode,
+        product: product
+      });
+    })
+    .catch(err => console.log(err));
 };
 
 exports.postEditProduct = (req, res, next) => {
@@ -48,24 +68,47 @@ exports.postEditProduct = (req, res, next) => {
   const imageUrl = req.body.imageUrl;
   const description = req.body.description;
   // get req info and set as params
-  const product = new Product(prdId, title, imageUrl, description, price);
-  //class a new class with req params to get new info. this order matters /same in models
-  product.save();
-  res.redirect("/admin/products");
+  Product.findByPk(prdId)
+    .then(product => {
+      product.title = title;
+      product.price = price;
+      product.imageUrl = imageUrl;
+      product.description = description;
+      product.userId = req.user.id; // req.user has been replaced by sequelize user
+      return product.save(); //sequelize method save it in database,if non exist create one
+    })
+    .then(() => {
+      res.redirect("/admin/products");
+    })
+    .catch(err => console.log(err));
 };
 
 exports.postDelProduct = (req, res, next) => {
   const prdId = req.body.productId;
-  Product.deleteById(prdId);
-  res.redirect("/admin/products");
+  // Product.destroy({ where: { id: prdId } })
+  //   .then(() => {
+  //     res.redirect("/admin/products");
+  //   })
+  //   .catch(err => console.log(err));
+  Product.findByPk(prdId) //other way to delete
+    .then(product => {
+      return product.destroy();
+    })
+    .then(() => {
+      res.redirect("/admin/products");
+    })
+    .catch(err => console.log(err));
 };
 
 exports.getProducts = (req, res, next) => {
-  Product.fetchAll(products => {
-    res.render("admin/products", {
-      prods: products,
-      pageTitle: "admin products page",
-      path: "/admin/products"
-    });
-  });
+  req.user
+    .getProducts()
+    .then(products => {
+      res.render("admin/products", {
+        prods: products,
+        pageTitle: "admin products page",
+        path: "/admin/products"
+      });
+    })
+    .catch(err => console.log(err));
 };
